@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SIEMplyDone Kanban</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:      #080a0f;
+      --surface: #0f1117;
+      --sur2:    #161820;
+      --sur3:    #1c1f2a;
+      --bdr:     #232634;
+      --bdr2:    #2e3245;
+      --text:    #dde1f0;
+      --muted:   #5a6080;
+      --muted2:  #7a84a8;
+      --teal:    #00adb5;
+      --doing:   #f5a623;
+      --hold:    #e85d75;
+      --done:    #3ecf8e;
+    }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg); color: var(--text);
+      font-family: 'Outfit', sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden;
+    }
+    body::before {
+      content: ''; position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 40% at 18% 0%, rgba(0,173,181,0.08) 0%, transparent 65%),
+        radial-gradient(ellipse 40% 30% at 82% 100%, rgba(62,207,142,0.05) 0%, transparent 65%);
+      pointer-events: none; z-index: 0;
+    }
+    body::after {
+      content: ''; position: fixed; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 28px 28px; pointer-events: none; z-index: 0;
+    }
+
+    /* ── HEADER ── */
+    header {
+      position: relative; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 30px;
+      border-bottom: 1px solid var(--bdr);
+      background: rgba(8,10,15,0.92); backdrop-filter: blur(16px); flex-shrink: 0;
+    }
+    .logo { display: flex; align-items: center; gap: 13px; }
+    .logo-icon {
+      width: 40px; height: 38px;
+      background: linear-gradient(145deg, #0a1a1b, #0d2325);
+      border: 1px solid rgba(0,173,181,0.35); border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 18px rgba(0,173,181,0.15), inset 0 1px 0 rgba(0,173,181,0.1);
+    }
+    .logo-icon svg { width: 22px; height: 22px; }
+    .logo-text h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.1; }
+    .logo-text h1 em { font-style: normal; color: var(--teal); }
+    .logo-text p { font-size: 10.5px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.4px; margin-top: 2px; }
+    .hdr-right { display: flex; align-items: center; gap: 10px; }
+
+    /* Overdue badge */
+    .overdue-badge {
+      display: none; align-items: center; gap: 6px;
+      background: rgba(232,93,117,0.12); border: 1px solid rgba(232,93,117,0.35);
+      color: var(--hold); border-radius: 8px; padding: 6px 12px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; font-weight: 500;
+      cursor: default;
+    }
+    .overdue-badge.visible { display: flex; }
+    .overdue-badge svg { width: 13px; height: 13px; }
+
+    /* Archive button */
+    .btn-archive {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; background: transparent;
+      border: 1px solid var(--bdr2); border-radius: 9px;
+      color: var(--muted2); font-family: 'Outfit', sans-serif;
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: all .18s;
+    }
+    .btn-archive:hover { color: var(--teal); border-color: rgba(0,173,181,.4); }
+    .btn-archive svg { width: 14px; height: 14px; }
+
+    .btn-new {
+      display: flex; align-items: center; gap: 7px; padding: 8px 17px;
+      background: var(--teal); color: #fff; border: none; border-radius: 9px;
+      font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 600; cursor: pointer;
+      transition: background .18s, transform .14s, box-shadow .18s;
+      box-shadow: 0 4px 16px rgba(0,173,181,0.22);
+    }
+    .btn-new:hover { background: #009aa1; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,173,181,0.32); }
+    .btn-new svg { width: 14px; height: 14px; }
+    .btn-new .shortcut-hint {
+      font-size: 10px; opacity: .7; font-family: 'IBM Plex Mono', monospace;
+      background: rgba(255,255,255,.15); border-radius: 4px; padding: 1px 5px; margin-left: 2px;
+    }
+
+    /* ── STATS ── */
+    .stats { position: relative; z-index: 1; display: flex; gap: 10px; padding: 18px 30px 0; flex-shrink: 0; flex-wrap: wrap; justify-content: center; }
+    .stat-pill {
+      display: flex; align-items: center; gap: 9px;
+      background: var(--surface); border: 1px solid var(--bdr);
+      border-radius: 10px; padding: 8px 15px; transition: border-color .18s;
+    }
+    .stat-pill:hover { border-color: rgba(0,173,181,.4); }
+    .stat-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .stat-num { font-family: 'IBM Plex Mono', monospace; font-size: 17px; font-weight: 500; }
+    .stat-lbl { font-size: 11.5px; color: var(--muted2); }
+
+    /* ── BOARD ── */
+    .board-wrap {
+      position: relative; z-index: 1; flex: 1; min-height: 0;
+      padding: 22px 30px 30px; overflow: auto;
+      display: flex; justify-content: center;
+    }
+    .board { display: flex; gap: 16px; align-items: flex-start; }
+
+    /* ── COLUMN ── */
+    .column {
+      width: 292px; background: var(--surface); border: 1px solid var(--bdr);
+      border-radius: 13px; padding: 13px; flex-shrink: 0;
+      transition: border-color .2s, background .2s;
+      display: flex; flex-direction: column;
+      max-height: calc(100vh - 175px);
+      box-sizing: border-box;
+    }
+    .column.drag-over { border-color: var(--teal); background: rgba(0,173,181,.03); }
+    .column.has-tasks { align-self: stretch; }
+    .column.has-tasks .cards { overflow-y: auto; flex: 1; }
+
+    /* ── CARDS ── */
+    .cards {
+      display: flex; flex-direction: column; gap: 9px; min-height: 52px;
+      padding-right: 2px;
+    }
+    .cards::-webkit-scrollbar { width: 3px; }
+    .cards::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
+    .cards::-webkit-scrollbar-track { background: transparent; }
+
+    
+    .col-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 13px; padding-bottom: 11px; border-bottom: 1px solid var(--bdr);
+    }
+    .col-left { display: flex; align-items: center; gap: 9px; }
+    .col-stripe { width: 3px; height: 17px; border-radius: 2px; }
+    .col-name { font-size: 12.5px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; }
+    .col-right { display: flex; align-items: center; gap: 7px; }
+    .col-count {
+      font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+      color: var(--muted2); background: var(--sur3);
+      border: 1px solid var(--bdr); padding: 2px 8px; border-radius: 20px;
+    }
+    .col-add-btn {
+      width: 23px; height: 23px; background: var(--sur3);
+      border: 1px solid var(--bdr); border-radius: 6px; color: var(--muted2);
+      cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .col-add-btn:hover { background: rgba(0,173,181,.15); color: var(--teal); border-color: rgba(0,173,181,.4); }
+    .col-add-btn svg { width: 11px; height: 11px; }
+
+    /* ── CARDS ── */
+    .card {
+      background: var(--sur2); border: 1px solid var(--bdr);
+      border-radius: 10px; padding: 12px 12px 10px; cursor: grab; position: relative;
+      transition: transform .15s, box-shadow .15s, border-color .15s;
+      animation: popIn .22s cubic-bezier(.34,1.56,.64,1) both;
+    }
+    @keyframes popIn {
+      from { opacity:0; transform:scale(.95) translateY(6px); }
+      to   { opacity:1; transform:scale(1)   translateY(0);   }
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 8px 26px rgba(0,0,0,.45); border-color: rgba(0,173,181,.45); }
+    .card.dragging { opacity: .35; cursor: grabbing; }
+    .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+    .card-tag {
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500;
+      padding: 3px 8px; border-radius: 5px; letter-spacing: 0.3px; line-height: 1.4;
+    }
+    .tag-tac { background:rgba(180,185,210,.1); color:#9098b8; }
+    .tag-det { background:rgba(180,185,210,.1); color:#9098b8; }
+    .tag-cfg { background:rgba(180,185,210,.1); color:#9098b8; }
+    .tag-doc { background:rgba(180,185,210,.1); color:#9098b8; }
+    .tag-req { background:rgba(180,185,210,.1); color:#9098b8; }
+    .tag-oth { background:rgba(180,185,210,.1); color:#9098b8; }
+    .card-del {
+      width: 21px; height: 21px; background: transparent; border: none;
+      color: transparent; cursor: pointer; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0;
+    }
+    .card:hover .card-del { color: var(--muted); }
+    .card-del:hover { color: var(--hold) !important; background: rgba(232,93,117,.1); }
+    .card-del svg { width: 11px; height: 11px; }
+    .card-edit {
+      width: 21px; height: 21px; background: transparent; border: none;
+      color: transparent; cursor: pointer; border-radius: 5px;
+      display: flex; align-items: center; justify-content: center; transition: all .15s; flex-shrink: 0;
+    }
+    .card:hover .card-edit { color: var(--muted); }
+    .card-edit:hover { color: var(--teal) !important; background: rgba(0,173,181,.1); }
+    .card-edit svg { width: 11px; height: 11px; }
+    .card-title { font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--text); margin-bottom: 6px; }
+    .card-notes {
+      font-size: 11.5px; color: var(--muted2); line-height: 1.5;
+      margin-bottom: 9px; font-style: italic;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .card-due {
+      display: flex; align-items: center; gap: 5px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      padding: 3px 8px; border-radius: 6px;
+      border: 1px solid var(--bdr); background: var(--sur3); color: var(--muted2);
+    }
+    .card-due svg { width: 10px; height: 10px; flex-shrink: 0; }
+    .card-due.overdue  { color:#e85d75; border-color:rgba(232,93,117,.3); background:rgba(232,93,117,.07); }
+    .card-due.due-soon { color:#f5a623; border-color:rgba(245,166,35,.3);  background:rgba(245,166,35,.07); }
+    .card-priority { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--muted); white-space: nowrap; }
+    .empty { border: 1.5px dashed var(--bdr); border-radius: 8px; padding: 18px; text-align: center; color: var(--muted); font-size: 12px; line-height: 1.7; }
+
+    /* Sort label */
+    .sort-label {
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--muted);
+      padding: 0 2px 8px; letter-spacing: 0.3px;
+    }
+
+    /* ── MODAL (shared) ── */
+    .backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.78);
+      backdrop-filter: blur(8px); z-index: 200;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity .2s;
+    }
+    .backdrop.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--bdr2);
+      border-radius: 16px; padding: 24px; width: 440px; max-width: 95vw;
+      box-shadow: 0 32px 64px rgba(0,0,0,.65);
+      transform: scale(.96) translateY(12px);
+      transition: transform .25s cubic-bezier(.34,1.4,.64,1);
+    }
+    .backdrop.open .modal { transform: scale(1) translateY(0); }
+    .modal-head { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+    .modal-head svg { width: 17px; height: 17px; color: var(--teal); flex-shrink: 0; }
+    .modal-head h2 { font-size: 17px; font-weight: 700; letter-spacing: -.3px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .fg { margin-bottom: 13px; }
+    .fg label {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 10.5px; font-weight: 600; color: var(--muted2);
+      text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 5px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .fg label svg { width: 10px; height: 10px; }
+    .fg input, .fg select, .fg textarea {
+      width: 100%; background: var(--sur3); border: 1px solid var(--bdr);
+      border-radius: 8px; padding: 8px 11px; color: var(--text);
+      font-family: 'Outfit', sans-serif; font-size: 13px;
+      outline: none; transition: border-color .15s, box-shadow .15s;
+    }
+    .fg input[type="datetime-local"] { color-scheme: dark; }
+    .fg input:focus, .fg select:focus, .fg textarea:focus {
+      border-color: var(--teal); box-shadow: 0 0 0 3px rgba(0,173,181,.12);
+    }
+    .fg select option { background: #1c1f2a; }
+    .fg textarea { resize: vertical; min-height: 72px; line-height: 1.5; }
+    .optional-hint { font-size: 9.5px; color: var(--muted); font-family: 'IBM Plex Mono', monospace; margin-left: 4px; text-transform: none; letter-spacing: 0; }
+    .modal-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 18px; }
+    .btn-cancel {
+      padding: 8px 17px; background: transparent; border: 1px solid var(--bdr2); border-radius: 8px;
+      color: var(--muted2); font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .btn-cancel:hover { color: var(--teal); border-color: rgba(0,173,181,.5); }
+    .btn-create {
+      padding: 8px 20px; background: var(--teal); border: none; border-radius: 8px; color: #fff;
+      font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: background .15s, transform .13s; box-shadow: 0 4px 14px rgba(0,173,181,.26);
+    }
+    .btn-create:hover { background: #009aa1; transform: translateY(-1px); }
+
+    /* ── DETAIL VIEW ── */
+    .detail-modal { width: 480px; max-height: 85vh; display: flex; flex-direction: column; overflow-y: auto; }
+    .detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+    .detail-tag-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .detail-title { font-size: 18px; font-weight: 700; line-height: 1.4; letter-spacing: -0.3px; margin-bottom: 4px; }
+    .detail-close {
+      width: 28px; height: 28px; background: var(--sur3); border: 1px solid var(--bdr);
+      border-radius: 7px; color: var(--muted2); cursor: pointer; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; transition: all .15s;
+    }
+    .detail-close:hover { color: var(--hold); border-color: rgba(232,93,117,.4); background: rgba(232,93,117,.07); }
+    .detail-close svg { width: 12px; height: 12px; }
+    .detail-section { margin-bottom: 16px; }
+    .detail-section-label {
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 500;
+      color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px;
+    }
+    .detail-notes-text {
+      font-size: 13.5px; line-height: 1.7; color: var(--muted2);
+      background: var(--sur3); border: 1px solid var(--bdr);
+      border-radius: 8px; padding: 12px 14px; white-space: pre-wrap; word-break: break-word;
+    }
+    .detail-meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .detail-meta-item {
+      background: var(--sur3); border: 1px solid var(--bdr);
+      border-radius: 8px; padding: 10px 12px;
+    }
+    .detail-meta-val { font-size: 13px; font-weight: 500; margin-top: 3px; }
+    .detail-divider { border: none; border-top: 1px solid var(--bdr); margin: 16px 0; }
+    .detail-actions { display: flex; gap: 9px; justify-content: flex-end; margin-top: 4px; }
+    .btn-detail-edit {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: rgba(0,173,181,.1); border: 1px solid rgba(0,173,181,.3);
+      border-radius: 8px; color: var(--teal); font-family: 'Outfit', sans-serif;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s;
+    }
+    .btn-detail-edit:hover { background: rgba(0,173,181,.2); }
+    .btn-detail-edit svg { width: 13px; height: 13px; }
+    .btn-detail-archive {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: transparent; border: 1px solid var(--bdr2);
+      border-radius: 8px; color: var(--muted2); font-family: 'Outfit', sans-serif;
+      font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .btn-detail-archive:hover { color: var(--done); border-color: rgba(62,207,142,.4); background: rgba(62,207,142,.07); }
+    .btn-detail-archive svg { width: 13px; height: 13px; }
+
+    /* ── ARCHIVE PANEL ── */
+    .archive-modal { width: 600px; max-height: 80vh; display: flex; flex-direction: column; }
+    .archive-modal .modal-head { margin-bottom: 14px; }
+    .archive-list { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+    .archive-empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+    .archive-item {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 11px 13px; border: 1px solid var(--bdr); border-radius: 9px;
+      background: var(--sur2); margin-bottom: 8px;
+      animation: popIn .2s ease both;
+    }
+    .archive-item-info { flex: 1; min-width: 0; }
+    .archive-item-title { font-size: 13px; font-weight: 500; margin-bottom: 5px; }
+    .archive-item-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .archive-tag {
+      font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+      padding: 2px 7px; border-radius: 4px;
+    }
+    .archive-date { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--muted2); }
+    .archive-notes { font-size: 11.5px; color: var(--muted2); font-style: italic; margin-top: 4px; }
+    .archive-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-restore {
+      padding: 5px 11px; background: rgba(0,173,181,.1); border: 1px solid rgba(0,173,181,.3);
+      border-radius: 6px; color: var(--teal); font-size: 11.5px; font-family: 'Outfit', sans-serif;
+      font-weight: 600; cursor: pointer; transition: all .15s;
+    }
+    .btn-restore:hover { background: rgba(0,173,181,.2); }
+    .btn-del-arc {
+      padding: 5px 9px; background: transparent; border: 1px solid var(--bdr);
+      border-radius: 6px; color: var(--muted); cursor: pointer; transition: all .15s;
+      display: flex; align-items: center;
+    }
+    .btn-del-arc:hover { color: var(--hold); border-color: rgba(232,93,117,.4); background: rgba(232,93,117,.07); }
+    .btn-del-arc svg { width: 11px; height: 11px; }
+    .archive-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bdr); }
+    .archive-count { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted2); }
+    .btn-clear-arc {
+      padding: 6px 13px; background: rgba(232,93,117,.08); border: 1px solid rgba(232,93,117,.25);
+      border-radius: 7px; color: var(--hold); font-size: 12px; font-family: 'Outfit', sans-serif;
+      font-weight: 500; cursor: pointer; transition: all .15s;
+    }
+    .btn-clear-arc:hover { background: rgba(232,93,117,.16); }
+
+    /* Drop indicator */
+    .drop-indicator {
+      height: 3px; border-radius: 2px;
+      background: var(--teal);
+      margin: 2px 0;
+      box-shadow: 0 0 8px rgba(0,173,181,.5);
+      pointer-events: none;
+    }
+
+    /* User greeting */
+    .user-greeting {
+      position: relative; z-index: 1;
+      padding: 16px 30px 0;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .greeting-datetime {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--muted2);
+    }
+    .greeting-sep { opacity: .4; }
+    #greeting-time { color: var(--teal); opacity: .8; }
+    .user-name-wrap {
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; width: fit-content;
+    }
+    .user-name-wrap svg:first-child { width: 16px; height: 16px; color: var(--muted2); flex-shrink: 0; }
+    .user-name-wrap:hover .name-edit-icon { opacity: 1; }
+    #user-name-display {
+      font-family: 'Outfit', sans-serif; font-size: 20px;
+      color: var(--teal); font-weight: 700; letter-spacing: -0.3px;
+    }
+    .name-edit-icon { width: 13px; height: 13px; opacity: 0; transition: opacity .15s; color: var(--muted2); flex-shrink: 0; }
+    #user-name-input {
+      display: none; font-family: 'Outfit', sans-serif; font-size: 20px; font-weight: 700;
+      color: var(--teal); background: transparent;
+      border: none; border-bottom: 1px solid var(--teal);
+      outline: none; padding: 0; width: 180px; letter-spacing: -0.3px;
+    }
+
+    /* Export button */
+    .btn-export {
+      display: flex; align-items: center; gap: 6px;
+      padding: 7px 14px; background: transparent;
+      border: 1px solid var(--bdr2); border-radius: 9px;
+      color: var(--muted2); font-family: 'Outfit', sans-serif;
+      font-size: 13px; font-weight: 500; cursor: pointer; transition: all .18s;
+    }
+    .btn-export:hover { color: var(--teal); border-color: rgba(0,173,181,.4); }
+    .btn-export svg { width: 14px; height: 14px; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bdr2); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00adb5" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10" stroke-opacity="0.3"/>
+        <circle cx="12" cy="12" r="6"  stroke-opacity="0.5"/>
+        <circle cx="12" cy="12" r="2.5" fill="#00adb5" stroke="none"/>
+        <line x1="12" y1="12" x2="20" y2="6" stroke-opacity="0.8"/>
+        <circle cx="18" cy="7.5" r="1.2" fill="#00adb5" stroke="none" opacity="0.9"/>
+        <line x1="12" y1="2"  x2="12" y2="4"  stroke-opacity="0.4"/>
+        <line x1="12" y1="20" x2="12" y2="22" stroke-opacity="0.4"/>
+        <line x1="2"  y1="12" x2="4"  y2="12" stroke-opacity="0.4"/>
+        <line x1="20" y1="12" x2="22" y2="12" stroke-opacity="0.4"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <h1>SIEMply<em>Done</em></h1>
+      <p>Security Operations Kanban Board</p>
+    </div>
+  </div>
+  <div class="hdr-right">
+    <div class="overdue-badge" id="overdue-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span id="overdue-count">0</span> overdue
+    </div>
+    <button class="btn-export" onclick="exportCSV()" title="Export to CSV">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Export CSV
+    </button>
+    <button class="btn-archive" onclick="openArchive()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      Archive
+    </button>
+    <button class="btn-new" onclick="openModal()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      New Task
+      <span class="shortcut-hint">N</span>
+    </button>
+  </div>
+</header>
+
+<div class="stats" id="stats"></div>
+
+<div class="user-greeting">
+  <div class="user-name-wrap" onclick="startEditName()" title="Click to rename">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span id="user-name-display">Dave</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" class="name-edit-icon"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    <input type="text" id="user-name-input" onblur="saveEditName()" onkeydown="nameKeyDown(event)" maxlength="30"/>
+  </div>
+  <div class="greeting-datetime">
+    <span id="greeting-date"></span>
+    <span class="greeting-sep">·</span>
+    <span id="greeting-time"></span>
+  </div>
+</div>
+
+<div class="board-wrap">
+  <div class="board">
+    <div class="column" data-col="todo" ondragover="dragOver(event)" ondrop="drop(event)">
+      <div class="col-header">
+        <div class="col-left">
+          <div class="col-stripe" style="background:var(--teal)"></div>
+          <span class="col-name" style="color:var(--teal)">To Do</span>
+        </div>
+        <div class="col-right">
+          <span class="col-count" id="count-todo">0</span>
+          <button class="col-add-btn" onclick="openModal('todo')" title="Add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="cards" id="cards-todo"></div>
+    </div>
+
+    <div class="column" data-col="doing" ondragover="dragOver(event)" ondrop="drop(event)">
+      <div class="col-header">
+        <div class="col-left">
+          <div class="col-stripe" style="background:var(--doing)"></div>
+          <span class="col-name" style="color:var(--doing)">In Progress</span>
+        </div>
+        <div class="col-right">
+          <span class="col-count" id="count-doing">0</span>
+          <button class="col-add-btn" onclick="openModal('doing')" title="Add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="cards" id="cards-doing"></div>
+    </div>
+
+    <div class="column" data-col="hold" ondragover="dragOver(event)" ondrop="drop(event)">
+      <div class="col-header">
+        <div class="col-left">
+          <div class="col-stripe" style="background:var(--hold)"></div>
+          <span class="col-name" style="color:var(--hold)">On Hold</span>
+        </div>
+        <div class="col-right">
+          <span class="col-count" id="count-hold">0</span>
+          <button class="col-add-btn" onclick="openModal('hold')" title="Add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="cards" id="cards-hold"></div>
+    </div>
+
+    <div class="column" data-col="done" ondragover="dragOver(event)" ondrop="drop(event)">
+      <div class="col-header">
+        <div class="col-left">
+          <div class="col-stripe" style="background:var(--done)"></div>
+          <span class="col-name" style="color:var(--done)">Done</span>
+        </div>
+        <div class="col-right">
+          <span class="col-count" id="count-done">0</span>
+          <button class="col-add-btn" onclick="openModal('done')" title="Add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="cards" id="cards-done"></div>
+    </div>
+  </div>
+</div>
+
+<!-- NEW TASK MODAL -->
+<div class="backdrop" id="backdrop" onclick="closeBackdrop(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <h2 id="modal-title">New Task</h2>
+    </div>
+    <div class="fg">
+      <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/></svg>Task Title</label>
+      <input type="text" id="inp-title" placeholder="Describe the task…"/>
+    </div>
+    <div class="fg">
+      <label>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Notes <span class="optional-hint">(optional)</span>
+      </label>
+      <textarea id="inp-notes" placeholder="Additional context, links, steps…"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="fg">
+        <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><circle cx="7" cy="7" r="1" fill="currentColor"/></svg>Tag</label>
+        <input type="text" id="inp-tag" list="tag-suggestions" placeholder="e.g. TAC, Detection Rule…" autocomplete="off"/>
+        <datalist id="tag-suggestions">
+          <option value="TAC"/>
+          <option value="Detection Rule"/>
+          <option value="Configuration"/>
+          <option value="Docs"/>
+          <option value="Request"/>
+          <option value="Others"/>
+        </datalist>
+      </div>
+      <div class="fg">
+        <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Column</label>
+        <select id="inp-col">
+          <option value="todo">To Do</option>
+          <option value="doing">In Progress</option>
+          <option value="hold">On Hold</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="fg">
+        <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Target Date &amp; Time</label>
+        <input type="datetime-local" id="inp-due"/>
+      </div>
+      <div class="fg">
+        <label><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>Priority</label>
+        <select id="inp-priority">
+          <option value="high">🔴 High</option>
+          <option value="med" selected>🟡 Medium</option>
+          <option value="low">🟢 Low</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-create" id="modal-submit-btn" onclick="submitTask()">Create Task</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL VIEW MODAL -->
+<div class="backdrop" id="detail-backdrop" onclick="closeDetailBackdrop(event)">
+  <div class="modal detail-modal" id="detail-modal-content"></div>
+</div>
+
+<!-- ARCHIVE MODAL -->
+<div class="backdrop" id="arc-backdrop" onclick="closeArcBackdrop(event)">
+  <div class="modal archive-modal">
+    <div class="modal-head">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5" rx="1"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+      <h2>Completed Archive</h2>
+    </div>
+    <div class="archive-list" id="archive-list"></div>
+    <div class="archive-footer">
+      <span class="archive-count" id="archive-count">0 items</span>
+      <button class="btn-clear-arc" onclick="clearArchive()">Clear All</button>
+    </div>
+  </div>
+</div>
+
+<footer style="position:relative;z-index:1;text-align:center;padding:14px 32px;border-top:1px solid var(--bdr);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:0.4px;flex-shrink:0;">
+  © <span id="copy-year"></span> Davelkling. All rights reserved.
+</footer>
+
+<script>
+  const COLS = ['todo','doing','hold','done'];
+  const TAG_LABELS = new Proxy({}, { get: (_, k) => k });
+  const PRI_LABELS = {high:'🔴 High',med:'🟡 Medium',low:'🟢 Low'};
+
+  let tasks   = [];
+  let archive = [];
+  try { tasks   = JSON.parse(localStorage.getItem('siemply-v3') || '[]'); } catch(e){}
+  try { archive = JSON.parse(localStorage.getItem('siemply-arc') || '[]'); } catch(e){}
+
+  if (!tasks.length) {
+    const s = d => { const n = new Date(Date.now()+d*86400000); n.setMinutes(0); return n.toISOString().slice(0,16); };
+    tasks = [
+      {id:uid(),col:'todo',  title:'Create detection rule for brute-force login attempts', notes:'Reference MITRE T1110. Check existing threshold configs first.', tag:'Detection Rule', priority:'high', due:s(3)},
+      {id:uid(),col:'todo',  title:'Document SIEM onboarding playbook',                    notes:'', tag:'Docs', priority:'med',  due:''},
+      {id:uid(),col:'todo',  title:'Review pending log source configuration request',       notes:'Ticket submitted by network team.', tag:'Request', priority:'low', due:s(7)},
+      {id:uid(),col:'doing', title:'Tune TAC alert thresholds for endpoint telemetry',      notes:'', tag:'TAC', priority:'high', due:s(1)},
+      {id:uid(),col:'doing', title:'Configure Syslog forwarder for new firewall cluster',   notes:'IP range: 10.20.30.0/24', tag:'Configuration', priority:'med', due:s(2)},
+      {id:uid(),col:'hold',  title:'Waiting for vendor response on integration schema',     notes:'', tag:'Others', priority:'med',  due:''},
+      {id:uid(),col:'done',  title:'Deploy Windows Event Log parser update',                notes:'', tag:'Configuration', priority:'low',  due:''},
+      {id:uid(),col:'done',  title:'Write runbook for phishing triage detection rule',      notes:'', tag:'Detection Rule', priority:'med',  due:''},
+    ];
+    save();
+  }
+
+  function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2); }
+  function save() {
+    localStorage.setItem('siemply-v3',  JSON.stringify(tasks));
+    localStorage.setItem('siemply-arc', JSON.stringify(archive));
+  }
+
+  function sortByDeadline(arr) {
+    return [...arr].sort((a, b) => {
+      if (!a.due && !b.due) return 0;
+      if (!a.due) return 1;
+      if (!b.due) return -1;
+      return new Date(a.due) - new Date(b.due);
+    });
+  }
+
+  function formatDue(due) {
+    if (!due) return null;
+    const d = new Date(due); if(isNaN(d)) return null;
+    const diff = d - Date.now();
+    return {
+      str: d.toLocaleDateString('en-US',{month:'short',day:'numeric'}) + ' · ' +
+           d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:true}),
+      over: diff < 0,
+      soon: diff > 0 && diff < 172800000
+    };
+  }
+
+  const calSvg  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`;
+  const xSvg    = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+  const editSvg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function render() {
+    let totalOverdue = 0;
+
+    COLS.forEach(col => {
+      const colTasks = tasks.filter(t => t.col === col);
+      document.getElementById('count-'+col).textContent = colTasks.length;
+      const el = document.getElementById('cards-'+col);
+      const colEl = el.closest('.column');
+
+      if (!colTasks.length) {
+        el.innerHTML = `<div class="empty">Drop tasks here<br><span style="opacity:.45">or click + to add</span></div>`;
+        colEl.classList.remove('has-tasks');
+        return;
+      }
+
+      colEl.classList.add('has-tasks');
+
+      el.innerHTML = colTasks.map(t => {
+          const due = formatDue(t.due);
+          const cls = due ? (due.over ? 'overdue' : due.soon ? 'due-soon' : '') : '';
+          if (due && due.over) totalOverdue++;
+          const dueHtml = due
+            ? `<span class="card-due ${cls}">${calSvg}${esc(due.str)}</span>`
+            : `<span class="card-due" style="opacity:.3">${calSvg}No due date</span>`;
+          const notesHtml = t.notes
+            ? `<div class="card-notes">${esc(t.notes)}</div>`
+            : '';
+          return `<div class="card" draggable="true" data-id="${t.id}" ondragstart="dragStart(event)" ondragend="dragEnd(event)">
+            <div class="card-top">
+              <span class="card-tag tag-oth">${esc(t.tag||'—')}</span>
+              <div style="display:flex;gap:3px;flex-shrink:0">
+                <button class="card-edit" onclick="openEditModal('${t.id}')" title="Edit task">${editSvg}</button>
+                <button class="card-del"  onclick="archiveTask('${t.id}')"   title="Complete &amp; archive">${xSvg}</button>
+              </div>
+            </div>
+            <div class="card-title" onclick="openDetail('${t.id}')" style="cursor:pointer" title="Click to view details">${esc(t.title)}</div>
+            ${notesHtml ? `<div class="card-notes" onclick="openDetail('${t.id}')" style="cursor:pointer">${esc(t.notes)}</div>` : ''}
+            <div class="card-footer">${dueHtml}<span class="card-priority">${PRI_LABELS[t.priority]||t.priority}</span></div>
+          </div>`;
+        }).join('');
+    });
+
+    // Overdue badge
+    const badge = document.getElementById('overdue-badge');
+    document.getElementById('overdue-count').textContent = totalOverdue;
+    badge.classList.toggle('visible', totalOverdue > 0);
+
+    // Stats
+    document.getElementById('stats').innerHTML = [
+      {l:'Total',       n:tasks.length,                                    c:'#dde1f0'},
+      {l:'To Do',       n:tasks.filter(t=>t.col==='todo').length,          c:'var(--teal)'},
+      {l:'In Progress', n:tasks.filter(t=>t.col==='doing').length,         c:'var(--doing)'},
+      {l:'On Hold',     n:tasks.filter(t=>t.col==='hold').length,          c:'var(--hold)'},
+      {l:'Completed',   n:tasks.filter(t=>t.col==='done').length,          c:'var(--done)'},
+      {l:'Archived',    n:archive.length,                                  c:'var(--muted2)'},
+    ].map(s=>`<div class="stat-pill"><div class="stat-dot" style="background:${s.c}"></div><span class="stat-num" style="color:${s.c}">${s.n}</span><span class="stat-lbl">${s.l}</span></div>`).join('');
+  }
+
+  // ── DRAG & DROP ──
+  let dragId = null;
+
+  function dragStart(e) {
+    dragId = e.currentTarget.dataset.id;
+    const card = e.currentTarget;
+    setTimeout(() => card.classList.add('dragging'), 0);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);
+  }
+
+  function dragEnd(e) {
+    try {
+      dragId = null;
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('dragging'));
+      document.querySelectorAll('.column').forEach(c => c.classList.remove('drag-over'));
+      document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+    } catch(_) {}
+  }
+
+  function getColFromCoords(x, y) {
+    const cols = document.querySelectorAll('.column');
+    for (const col of cols) {
+      const r = col.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return col;
+    }
+    return null;
+  }
+
+  let _dragOverFrame = null;
+  function dragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (_dragOverFrame) return;
+    _dragOverFrame = requestAnimationFrame(() => {
+      _dragOverFrame = null;
+      try {
+        const col = getColFromCoords(e.clientX, e.clientY);
+        document.querySelectorAll('.column').forEach(c => c.classList.remove('drag-over'));
+        document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+        if (!col) return;
+        col.classList.add('drag-over');
+        const cardsEl = col.querySelector('.cards');
+        if (!cardsEl) return;
+        const cards = [...cardsEl.querySelectorAll('.card:not(.dragging)')];
+        if (!cards.length) return;
+        let inserted = false;
+        for (const card of cards) {
+          const rect = card.getBoundingClientRect();
+          if (e.clientY < rect.top + rect.height / 2) {
+            const ind = document.createElement('div');
+            ind.className = 'drop-indicator';
+            cardsEl.insertBefore(ind, card);
+            inserted = true;
+            break;
+          }
+        }
+        if (!inserted) {
+          const ind = document.createElement('div');
+          ind.className = 'drop-indicator';
+          cardsEl.appendChild(ind);
+        }
+      } catch(_) {}
+    });
+  }
+
+  function drop(e) {
+    e.preventDefault();
+    try {
+      if (_dragOverFrame) { cancelAnimationFrame(_dragOverFrame); _dragOverFrame = null; }
+      document.querySelectorAll('.column').forEach(c => c.classList.remove('drag-over'));
+      document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+      const col   = getColFromCoords(e.clientX, e.clientY);
+      const colId = col ? col.dataset.col : null;
+      const task  = tasks.find(t => t.id === dragId);
+      if (!task || !colId) { dragId = null; return; }
+      const cardsEl = col.querySelector('.cards');
+      if (!cardsEl) { dragId = null; return; }
+      const srcIdx = tasks.findIndex(t => t.id === dragId);
+      tasks.splice(srcIdx, 1);
+      task.col = colId;
+      let lastIdx = -1;
+      tasks.forEach((t, i) => { if (t.col === colId) lastIdx = i; });
+      tasks.splice(lastIdx + 1, 0, task);
+      save(); render();
+      dragId = null;
+    } catch(err) { console.warn('drop error:', err); dragId = null; }
+  }
+
+  // ── TASK MODAL ──
+  let _col = 'todo';
+  let _editId = null; // null = create mode, id = edit mode
+
+  function openModal(col) {
+    _editId = null;
+    _col = col || 'todo';
+    document.getElementById('modal-title').textContent = 'New Task';
+    document.getElementById('modal-submit-btn').textContent = 'Create Task';
+    document.getElementById('inp-col').value = _col;
+    document.getElementById('inp-title').value = '';
+    document.getElementById('inp-notes').value = '';
+    document.getElementById('inp-due').value = '';
+    document.getElementById('inp-tag').value = '';
+    document.getElementById('inp-priority').value = 'med';
+    document.getElementById('backdrop').classList.add('open');
+    setTimeout(() => document.getElementById('inp-title').focus(), 200);
+  }
+
+  function openEditModal(id) {
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    _editId = id;
+    document.getElementById('modal-title').textContent = 'Edit Task';
+    document.getElementById('modal-submit-btn').textContent = 'Save Changes';
+    document.getElementById('inp-title').value    = t.title;
+    document.getElementById('inp-notes').value    = t.notes || '';
+    document.getElementById('inp-tag').value      = t.tag;
+    document.getElementById('inp-col').value      = t.col;
+    document.getElementById('inp-due').value      = t.due || '';
+    document.getElementById('inp-priority').value = t.priority;
+    document.getElementById('backdrop').classList.add('open');
+    setTimeout(() => document.getElementById('inp-title').focus(), 200);
+  }
+
+  function closeModal() { document.getElementById('backdrop').classList.remove('open'); _editId = null; }
+  function closeBackdrop(e) { if (e.target === document.getElementById('backdrop')) closeModal(); }
+
+  function submitTask() {
+    const title = document.getElementById('inp-title').value.trim();
+    if (!title) { document.getElementById('inp-title').focus(); return; }
+    if (_editId) {
+      // Edit mode — update existing task
+      const t = tasks.find(t => t.id === _editId);
+      if (t) {
+        t.title    = title;
+        t.notes    = document.getElementById('inp-notes').value.trim();
+        t.tag      = document.getElementById('inp-tag').value;
+        t.col      = document.getElementById('inp-col').value;
+        t.due      = document.getElementById('inp-due').value;
+        t.priority = document.getElementById('inp-priority').value;
+      }
+    } else {
+      // Create mode — new task
+      tasks.push({
+        id: uid(), title,
+        notes:    document.getElementById('inp-notes').value.trim(),
+        tag:      document.getElementById('inp-tag').value,
+        col:      document.getElementById('inp-col').value,
+        due:      document.getElementById('inp-due').value,
+        priority: document.getElementById('inp-priority').value,
+      });
+    }
+    save(); render(); closeModal();
+  }
+
+  // ── ARCHIVE ──
+  function archiveTask(id){
+    const idx = tasks.findIndex(t=>t.id===id);
+    if(idx===-1) return;
+    const t = tasks.splice(idx,1)[0];
+    t.archivedAt = new Date().toISOString();
+    archive.unshift(t);
+    save(); render();
+  }
+
+  function openArchive(){
+    renderArchive();
+    document.getElementById('arc-backdrop').classList.add('open');
+  }
+  function closeArchive(){ document.getElementById('arc-backdrop').classList.remove('open'); }
+  function closeArcBackdrop(e){ if(e.target===document.getElementById('arc-backdrop')) closeArchive(); }
+
+  function renderArchive(){
+    const list = document.getElementById('archive-list');
+    document.getElementById('archive-count').textContent = archive.length+' item'+(archive.length!==1?'s':'');
+    if(!archive.length){
+      list.innerHTML=`<div class="archive-empty">No archived tasks yet.<br><span style="opacity:.5">Complete tasks using the ✕ button on any card.</span></div>`;
+      return;
+    }
+    list.innerHTML = archive.map(t => {
+      const d = t.archivedAt ? new Date(t.archivedAt) : null;
+      const dateStr = d ? 'Archived ' + d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+      return `<div class="archive-item">
+        <div class="archive-item-info">
+          <div class="archive-item-title">${esc(t.title)}</div>
+          <div class="archive-item-meta">
+            <span class="archive-tag tag-oth">${esc(t.tag||'—')}</span>
+            <span class="archive-date">${PRI_LABELS[t.priority]||''}</span>
+            ${dateStr ? `<span class="archive-date">${esc(dateStr)}</span>` : ''}
+          </div>
+          ${t.notes ? `<div class="archive-notes">${esc(t.notes)}</div>` : ''}
+        </div>
+        <div class="archive-actions">
+          <button class="btn-restore" onclick="restoreTask('${t.id}')">Restore</button>
+          <button class="btn-del-arc" onclick="deleteFromArchive('${t.id}')">${xSvg}</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function restoreTask(id){
+    const idx = archive.findIndex(t=>t.id===id);
+    if(idx===-1) return;
+    const t = archive.splice(idx,1)[0];
+    delete t.archivedAt;
+    t.col = 'todo';
+    tasks.push(t);
+    save(); render(); renderArchive();
+  }
+
+  function deleteFromArchive(id){
+    archive = archive.filter(t=>t.id!==id);
+    save(); render(); renderArchive();
+  }
+
+  function clearArchive(){
+    if(!archive.length) return;
+    if(!confirm('Permanently delete all '+archive.length+' archived task(s)?')) return;
+    archive = [];
+    save(); render(); renderArchive();
+  }
+
+  // ── DETAIL VIEW ──
+  const COL_LABELS = {todo:'To Do', doing:'In Progress', hold:'On Hold', done:'Done'};
+  const COL_COLORS = {todo:'var(--teal)', doing:'var(--doing)', hold:'var(--hold)', done:'var(--done)'};
+
+  function openDetail(id) {
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    const due = formatDue(t.due);
+    const dueCls = due ? (due.over ? 'overdue' : due.soon ? 'due-soon' : '') : '';
+
+    document.getElementById('detail-modal-content').innerHTML = `
+      <div class="detail-tag-row">
+        <span class="card-tag tag-oth">${esc(t.tag||'—')}</span>
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:${COL_COLORS[t.col]}">${COL_LABELS[t.col]||t.col}</span>
+      </div>
+      <div class="detail-header">
+        <div class="detail-title">${esc(t.title)}</div>
+        <button class="detail-close" onclick="closeDetail()">${xSvg}</button>
+      </div>
+
+      ${t.notes ? `
+      <div class="detail-section">
+        <div class="detail-section-label">Notes</div>
+        <div class="detail-notes-text">${esc(t.notes)}</div>
+      </div>` : ''}
+
+      <div class="detail-meta-grid">
+        <div class="detail-meta-item">
+          <div class="detail-section-label">Priority</div>
+          <div class="detail-meta-val">${PRI_LABELS[t.priority]||t.priority}</div>
+        </div>
+        <div class="detail-meta-item">
+          <div class="detail-section-label">Tag</div>
+          <div class="detail-meta-val"><span class="card-tag tag-oth" style="font-size:11px">${esc(t.tag||'—')}</span></div>
+        </div>
+        <div class="detail-meta-item" style="grid-column:1/-1">
+          <div class="detail-section-label">Target Deadline</div>
+          <div class="detail-meta-val">
+            ${due
+              ? `<span class="card-due ${dueCls}" style="display:inline-flex;font-size:12px">${calSvg}${esc(due.str)}${due.over ? ' — Overdue' : due.soon ? ' — Due soon' : ''}</span>`
+              : `<span style="color:var(--muted);font-size:13px">No due date set</span>`
+            }
+          </div>
+        </div>
+      </div>
+
+      <hr class="detail-divider"/>
+      <div class="detail-actions">
+        <button class="btn-detail-edit" onclick="closeDetail();openEditModal('${t.id}')">
+          ${editSvg} Edit Task
+        </button>
+      </div>
+    `;
+    document.getElementById('detail-backdrop').classList.add('open');
+  }
+
+  function closeDetail() { document.getElementById('detail-backdrop').classList.remove('open'); }
+  function closeDetailBackdrop(e) { if (e.target === document.getElementById('detail-backdrop')) closeDetail(); }
+
+  // ── REAL-TIME CLOCK ──
+  function updateClock() {
+    const now  = new Date();
+    document.getElementById('greeting-date').textContent = now.toLocaleDateString('en-US', {
+      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+    });
+    document.getElementById('greeting-time').textContent = now.toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  // ── USER NAME ──
+  function startEditName() {
+    const display = document.getElementById('user-name-display');
+    const input   = document.getElementById('user-name-input');
+    input.value   = display.textContent;
+    display.style.display = 'none';
+    input.style.display   = 'inline-block';
+    input.focus();
+    input.select();
+  }
+  function saveEditName() {
+    const display = document.getElementById('user-name-display');
+    const input   = document.getElementById('user-name-input');
+    const val     = input.value.trim() || 'Dave';
+    display.textContent   = val;
+    display.style.display = 'inline';
+    input.style.display   = 'none';
+    localStorage.setItem('siemply-username', val);
+  }
+  function nameKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); saveEditName(); }
+    if (e.key === 'Escape') {
+      document.getElementById('user-name-input').style.display = 'none';
+      document.getElementById('user-name-display').style.display = 'inline';
+    }
+  }
+
+  // ── EXPORT CSV ──
+  function exportCSV() {
+    const headers = ['Title','Notes','Tag','Column','Priority','Due Date','Status'];
+    const COL_NAMES = {todo:'To Do', doing:'In Progress', hold:'On Hold', done:'Done'};
+    const PRI_NAMES = {high:'High', med:'Medium', low:'Low'};
+
+    const rows = tasks.map(t => [
+      t.title,
+      t.notes || '',
+      t.tag   || '',
+      COL_NAMES[t.col] || t.col,
+      PRI_NAMES[t.priority] || t.priority,
+      t.due ? new Date(t.due).toLocaleString('en-US') : '',
+      t.col === 'done' ? 'Completed' : 'Active'
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const date = new Date().toISOString().slice(0,10);
+    a.href     = url;
+    a.download = `siemplydone-tasks-${date}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ── KEYBOARD SHORTCUTS ──
+  document.addEventListener('keydown', e => {
+    const inInput = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+    if(e.key==='Escape'){ closeModal(); closeArchive(); closeDetail(); }
+    if(e.key==='Enter' && document.getElementById('backdrop').classList.contains('open') && !inInput) submitTask();
+    if(e.key==='n' && !inInput &&
+       !document.getElementById('backdrop').classList.contains('open') &&
+       !document.getElementById('arc-backdrop').classList.contains('open') &&
+       !document.getElementById('detail-backdrop').classList.contains('open')) {
+      openModal();
+    }
+  });
+
+  document.getElementById('copy-year').textContent = new Date().getFullYear();
+  const savedName = localStorage.getItem('siemply-username');
+  if (savedName) document.getElementById('user-name-display').textContent = savedName;
+  render();
+</script>
+</body>
+</html>
